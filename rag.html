@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RAG Flight Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#000;--panel:#07090c;--panel2:#0c0f13;
+  --line:rgba(255,255,255,.12);--line2:rgba(255,255,255,.28);
+  --text:#f2f2f2;--muted:#8b9096;--dim:#4a4f55;
+  --hot:#5fb4ff;--warn:#ff8a3d;
+  --d0:#5fb4ff;--d1:#ff8a3d;--d2:#b98cff;--d3:#4fd1a5;--d4:#f2c94c;--d5:#ff6b8b;
+  --cond:'Barlow Condensed','Arial Narrow',sans-serif;
+  --sans:'Barlow',system-ui,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-weight:300;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+::selection{background:#fff;color:#000}
+a{color:inherit}
+.wrap{max-width:1240px;margin:0 auto;padding:0 24px}
+
+/* ---------- HERO ---------- */
+.hero{position:relative;min-height:100vh;min-height:100svh;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;border-bottom:1px solid var(--line)}
+#stars{position:absolute;inset:0;width:100%;height:100%}
+.planet{position:absolute;left:50%;bottom:-150vw;width:220vw;height:220vw;transform:translateX(-50%);border-radius:50%;
+  background:radial-gradient(closest-side,#050608 97%,transparent 100%);
+  box-shadow:0 -2px 0 rgba(255,255,255,.55),0 -30px 120px rgba(95,180,255,.28),0 -4px 30px rgba(140,200,255,.35)}
+.topbar{position:absolute;top:0;left:0;right:0;z-index:3;display:flex;justify-content:space-between;align-items:center;padding:26px 32px}
+.logo{font-family:var(--cond);font-weight:600;letter-spacing:.42em;font-size:18px}
+.logo span{color:var(--muted);font-weight:300}
+.topbar nav{display:flex;gap:28px;font-family:var(--cond);letter-spacing:.16em;font-size:13px;text-transform:uppercase}
+.topbar nav a{text-decoration:none;opacity:.8}
+.topbar nav a:hover{opacity:1}
+.hero-content{position:relative;z-index:2;padding:0 32px 14vh;max-width:900px}
+.eyebrow{font-family:var(--cond);letter-spacing:.32em;font-size:13px;color:var(--muted);text-transform:uppercase;margin-bottom:18px}
+.hero h1{font-family:var(--cond);font-weight:500;font-size:clamp(44px,8vw,104px);line-height:.92;letter-spacing:.02em;text-transform:uppercase}
+.hero p{max-width:560px;margin:26px 0 34px;color:#c9ccd0;font-size:18px}
+.btn{display:inline-flex;align-items:center;gap:12px;font-family:var(--cond);font-weight:500;letter-spacing:.2em;text-transform:uppercase;font-size:14px;
+  color:#fff;background:transparent;border:2px solid #fff;padding:14px 30px;cursor:pointer;text-decoration:none;transition:background .25s,color .25s}
+.btn:hover{background:#fff;color:#000}
+.btn.solid{background:#fff;color:#000}
+.btn.solid:hover{background:transparent;color:#fff}
+.btn:disabled{opacity:.6;cursor:wait}
+.hero-meta{position:absolute;right:32px;bottom:14vh;z-index:2;font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right;line-height:2}
+@media(max-width:760px){.topbar nav{display:none}.hero-meta{display:none}.hero-content{padding:0 20px 12vh}}
+
+/* ---------- TRACKER ---------- */
+.tracker{position:sticky;top:0;z-index:50;background:rgba(0,0,0,.86);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.tracker .wrap{display:flex;align-items:stretch;gap:0;overflow-x:auto;scrollbar-width:none}
+.tracker .wrap::-webkit-scrollbar{display:none}
+.phase{display:flex;align-items:stretch}
+.phase-label{writing-mode:vertical-rl;transform:rotate(180deg);font-family:var(--mono);font-size:9px;letter-spacing:.2em;color:var(--dim);padding:6px 4px;border-left:1px solid var(--line)}
+.step{position:relative;display:flex;flex-direction:column;justify-content:center;padding:12px 18px;min-width:104px;text-decoration:none;color:var(--dim);border-left:1px solid var(--line);transition:color .3s}
+.step b{font-family:var(--mono);font-weight:400;font-size:11px}
+.step span{font-family:var(--cond);letter-spacing:.18em;font-size:13px;text-transform:uppercase}
+.step::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:#fff;transform:scaleX(0);transform-origin:left;transition:transform .4s}
+.step.done{color:var(--muted)}
+.step.active{color:#fff}
+.step.active::after{transform:scaleX(1)}
+.telemetry{margin-left:auto;display:flex;gap:22px;align-items:center;padding:0 0 0 22px;border-left:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
+.telemetry em{font-style:normal;color:#fff}
+
+/* ---------- STAGES ---------- */
+.stage{padding:110px 0 100px;border-bottom:1px solid var(--line);position:relative}
+.stage-head{display:grid;grid-template-columns:180px 1fr;gap:32px;margin-bottom:46px}
+.stage-num{font-family:var(--cond);font-weight:300;font-size:96px;line-height:.8;color:transparent;-webkit-text-stroke:1px rgba(255,255,255,.5)}
+.stage-phase{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--muted);margin-bottom:10px;text-transform:uppercase}
+.stage-phase i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:8px;vertical-align:1px;background:var(--muted)}
+.stage-phase.online i{background:var(--hot);box-shadow:0 0 10px var(--hot)}
+.stage h2{font-family:var(--cond);font-weight:500;font-size:clamp(34px,4.5vw,56px);text-transform:uppercase;letter-spacing:.04em;line-height:1}
+.stage-desc{color:#bfc3c8;font-size:17px;max-width:760px;margin-top:16px}
+.keyidea{margin-top:18px;border-left:2px solid #fff;padding:4px 0 4px 16px;font-size:15px;color:#e8e8e8;max-width:760px}
+.keyidea b{font-family:var(--cond);letter-spacing:.18em;font-weight:500;font-size:12px;display:block;color:var(--muted)}
+@media(max-width:760px){.stage{padding:72px 0 64px}.stage-head{grid-template-columns:1fr;gap:12px}.stage-num{font-size:64px}}
+
+.panel{background:var(--panel);border:1px solid var(--line);position:relative}
+.panel-h{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);font-family:var(--cond);letter-spacing:.2em;font-size:12px;text-transform:uppercase;color:var(--muted)}
+.panel-h em{font-style:normal;font-family:var(--mono);letter-spacing:0;color:#fff}
+.panel-b{padding:16px}
+.corner::before,.corner::after{content:"";position:absolute;width:10px;height:10px;border-color:#fff;border-style:solid}
+.corner::before{top:-1px;left:-1px;border-width:1px 0 0 1px}
+.corner::after{bottom:-1px;right:-1px;border-width:0 1px 1px 0}
+
+.grid{display:grid;gap:16px}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:1fr 1fr}
+@media(max-width:980px){.g3{grid-template-columns:1fr 1fr}}
+@media(max-width:680px){.g3,.g2{grid-template-columns:1fr}}
+
+.tag{display:inline-block;font-family:var(--mono);font-size:10.5px;padding:2px 6px;border:1px solid currentColor;line-height:1.4;white-space:nowrap}
+.mono{font-family:var(--mono)}
+.muted{color:var(--muted)}
+
+/* docs */
+.doc{cursor:pointer;transition:border-color .2s}
+.doc:hover{border-color:var(--line2)}
+.doc h3{font-family:var(--cond);font-weight:500;letter-spacing:.08em;text-transform:uppercase;font-size:20px;margin:10px 0 6px}
+.doc p{font-size:14px;color:#aeb2b7;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.doc.open p{-webkit-line-clamp:unset}
+.doc .meta{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted)}
+
+/* controls */
+.controls{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-end;margin-bottom:22px}
+.ctrl label{display:flex;justify-content:space-between;gap:20px;font-family:var(--cond);letter-spacing:.18em;font-size:12px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.ctrl label em{font-style:normal;font-family:var(--mono);color:#fff;letter-spacing:0}
+.ctrl{min-width:200px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:2px;background:var(--line2);outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:#fff;border-radius:0;cursor:pointer}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;background:#fff;border:0;border-radius:0;cursor:pointer}
+
+/* chunks */
+.chunks{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;max-height:560px;overflow:auto;padding-right:4px}
+.chunk{border:1px solid var(--line);border-left:3px solid var(--c);padding:10px 12px;font-size:12.5px;color:#b8bcc1;background:var(--panel);opacity:0;animation:in .45s forwards}
+.chunk .cid{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-bottom:6px}
+.chunk mark{background:rgba(255,255,255,.14);color:#fff;padding:0 1px}
+@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:14px}
+.legend i{display:inline-block;width:9px;height:9px;margin-right:6px;vertical-align:0}
+
+canvas.viz{display:block;width:100%}
+.tooltip{position:fixed;pointer-events:none;z-index:99;background:#000;border:1px solid var(--line2);padding:8px 10px;font-size:12px;max-width:280px;display:none}
+.tooltip b{font-family:var(--mono);font-weight:500}
+
+/* query */
+.qbox{display:flex;gap:0;border:1px solid var(--line2)}
+.qbox input{flex:1;background:transparent;border:0;color:#fff;font-family:var(--sans);font-size:20px;font-weight:300;padding:18px 20px;outline:none;min-width:0}
+.qbox .btn{border:0;border-left:1px solid var(--line2)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 30px}
+.chip{font-family:var(--sans);font-size:13px;color:#cfd2d6;border:1px solid var(--line);background:transparent;padding:7px 12px;cursor:pointer;transition:all .2s}
+.chip:hover{border-color:#fff;color:#fff}
+.termchips{display:flex;flex-wrap:wrap;gap:8px}
+.term{font-family:var(--mono);font-size:12px;border:1px solid var(--line2);padding:4px 8px}
+.term small{color:var(--hot);margin-left:6px}
+
+/* retrieval lists */
+.rlist{list-style:none}
+.row{display:grid;grid-template-columns:26px 54px 1fr 64px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;opacity:0;animation:in .4s forwards}
+.row .rk{font-family:var(--mono);color:var(--muted);font-size:11px}
+.row .ttl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#c4c8cc}
+.row .sc{font-family:var(--mono);font-size:11px;text-align:right}
+.bar{height:2px;background:var(--line);margin-top:5px;position:relative}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:#fff}
+.row.both .ttl::before{content:"◆ ";color:var(--hot)}
+.note{font-size:13px;color:var(--muted);margin-top:12px}
+.awaiting{border:1px dashed var(--line2);padding:46px 24px;text-align:center;font-family:var(--cond);letter-spacing:.24em;text-transform:uppercase;color:var(--muted)}
+.awaiting .btn{margin-top:18px}
+
+/* rerank */
+.rr{display:grid;grid-template-columns:30px 58px 1fr 160px 70px;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:13px;opacity:0;animation:in .45s forwards}
+.rr.out{opacity:.35}
+.rr.out{animation:fadeout .45s forwards}
+@keyframes fadeout{from{opacity:0}to{opacity:.35}}
+.delta{font-family:var(--mono);font-size:11px}
+.up{color:var(--d3)}.down{color:var(--d5)}.flat{color:var(--muted)}
+.comps{font-family:var(--mono);font-size:10.5px;color:var(--muted);display:flex;gap:8px}
+.cutoff{display:flex;align-items:center;gap:12px;margin:10px 0;font-family:var(--mono);font-size:11px;color:var(--warn);letter-spacing:.12em}
+.cutoff::before,.cutoff::after{content:"";flex:1;height:1px;background:var(--warn);opacity:.6}
+@media(max-width:680px){.rr{grid-template-columns:26px 54px 1fr 60px}.rr .comps{display:none}}
+
+/* prompt */
+pre.prompt{font-family:var(--mono);font-size:12.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word;color:#c8ccd0;max-height:520px;overflow:auto}
+pre.prompt .k{color:#fff;font-weight:500}
+pre.prompt .q{color:var(--hot)}
+
+/* answer */
+.answer{font-size:20px;line-height:1.65;min-height:120px;color:#f2f2f2}
+.answer sup{font-family:var(--mono);font-size:11px;color:var(--hot);margin-left:2px}
+.caret{display:inline-block;width:9px;height:20px;background:#fff;vertical-align:-3px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.cites{margin-top:24px;border-top:1px solid var(--line);padding-top:14px;font-size:13px;color:var(--muted)}
+.cites div{padding:4px 0}
+
+/* funnel */
+.funnel{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--line)}
+.funnel div{padding:26px 18px;border-left:1px solid var(--line)}
+.funnel div:first-child{border-left:0}
+.funnel b{display:block;font-family:var(--cond);font-weight:400;font-size:52px;line-height:1}
+.funnel span{font-family:var(--cond);letter-spacing:.2em;font-size:12px;text-transform:uppercase;color:var(--muted)}
+@media(max-width:760px){.funnel{grid-template-columns:1fr 1fr}.funnel div{border-top:1px solid var(--line)}}
+footer{padding:60px 0 80px;font-family:var(--mono);font-size:11px;color:var(--dim)}
+</style>
+</head>
+<body>
+
+<!-- ================= HERO ================= -->
+<header class="hero" id="top">
+  <canvas id="stars"></canvas>
+  <div class="planet"></div>
+  <div class="topbar">
+    <div class="logo">RAG<span>//</span>SIM</div>
+    <nav>
+      <a href="#s1">Indexing</a><a href="#s4">Query</a><a href="#s8">Answer</a><a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div class="hero-content">
+    <div class="eyebrow">Mission profile · Retrieval Augmented Generation</div>
+    <h1>From a mountain<br>of data to one<br>grounded answer</h1>
+    <p>Fly a question through every stage of a RAG pipeline. Chunk, embed, retrieve, rerank, augment and generate, with live telemetry at each step.</p>
+    <a class="btn" href="#s1">Begin sequence <span>↓</span></a>
+  </div>
+  <div class="hero-meta">
+    VEHICLE · RAG-08<br>STAGES · 08<br>EMBEDDING DIMS · 96<br>STATUS · <span id="heroStatus">GO FOR LAUNCH</span>
+  </div>
+</header>
+
+<!-- ================= TRACKER ================= -->
+<div class="tracker">
+  <div class="wrap">
+    <div class="phase"><div class="phase-label">OFFLINE</div>
+      <a class="step" href="#s1" data-s="s1"><b>01</b><span>Ingest</span></a>
+      <a class="step" href="#s2" data-s="s2"><b>02</b><span>Chunk</span></a>
+      <a class="step" href="#s3" data-s="s3"><b>03</b><span>Embed</span></a>
+    </div>
+    <div class="phase"><div class="phase-label">ONLINE</div>
+      <a class="step" href="#s4" data-s="s4"><b>04</b><span>Query</span></a>
+      <a class="step" href="#s5" data-s="s5"><b>05</b><span>Retrieve</span></a>
+      <a class="step" href="#s6" data-s="s6"><b>06</b><span>Rerank</span></a>
+      <a class="step" href="#s7" data-s="s7"><b>07</b><span>Augment</span></a>
+      <a class="step" href="#s8" data-s="s8"><b>08</b><span>Generate</span></a>
+    </div>
+    <div class="telemetry">
+      <div>CHUNKS <em id="tChunks">0</em></div>
+      <div>K <em id="tK">0</em></div>
+      <div>CONTEXT <em id="tN">0</em></div>
+    </div>
+  </div>
+</div>
+
+<main>
+<!-- ================= 01 INGEST ================= -->
+<section class="stage" id="s1">
+  <div class="wrap">
+    <div class="stage-head">
+      <div class="stage-num">01</div>
+      <div>
+        <div class="stage-phase"><i></i>Indexing phase · runs once, ahead of time</div>
+        <h2>Ingest the corpus</h2>
+        <p class="stage-desc">Everything starts with your knowledge base: PDFs, help docs, wikis, tickets. Here the corpus is a fictional launch provider's handbook with six documents. An LLM has never seen this data, so it cannot answer questions about it without RAG.</p>
+        <div class="keyidea"><b>Key idea</b>RAG lets a model answer from private or fresh data without retraining it.</div>
+      </div>
+    </div>
+    <div class="grid g3" id="docs"></div>
+  </div>
+</section>
+
+<!-- ================= 02 CHUNK ================= -->
+<section class="stage" id="s2">
+  <div class="wrap">
+    <div class="stage-head">
+      <div class="stage-num">02</div>
+      <div>
+        <div class="stage-phase"><i></i>Indexing phase · runs once, ahead of time</div>
+        <h2>Chunk the documents</h2>
+        <p class="stage-desc">Documents are too long to search or send to an LLM whole, so they are split into small, overlapping chunks. Overlap (highlighted text) keeps a sentence that crosses a boundary from losing its meaning. Drag the sliders and watch the chunk count change.</p>
+        <div class="keyidea"><b>Trade-off</b>Small chunks are precise but lose context. Large chunks keep context but dilute relevance and waste prompt space.</div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="ctrl"><label>Chunk size <em id="vSize">40 words</em></label><input type="range" id="size" min="20" max="90" step="5" value="40"></div>
+      <div class="ctrl"><label>Overlap <em id="vOv">8 words</em></label><input type="range" id="overlap" min="0" max="20" step="2" value="8"></div>
+    </div>
+    <div class="chunks" id="chunks"></div>
+    <div class="legend" id="legend"></div>
+  </div>
+</section>
+
+<!-- ================= 03 EMBED ================= -->
+<section class="stage" id="s3">
+  <div class="wrap">
+    <div class="stage-head">
+      <div class="stage-num">03</div>
+      <div>
+        <div class="stage-phase"><i></i>Indexing phase · runs once, ahead of time</div>
+        <h2>Embed and store</h2>
+        <p class="stage-desc">An embedding model turns every chunk into a vector, a list of numbers that captures its meaning. Chunks about similar topics end up close together, even when they use different words. The vectors are saved in a vector database, ready for search.</p>
+        <div class="keyidea"><b>Key idea</b>Meaning becomes geometry. "Price" and "cost" land near each other, so search works on meaning, not exact spelling.</div>
+      </div>
+    </div>
+    <div class="grid g2">
+      <div class="panel corner">
+        <div class="panel-h">Vector database · each row is one chunk <em id="dbDims">96 dims</em></div>
+        <div class="panel-b"><canvas class="viz" id="heat" height="360"></canvas>
+          <p class="note">White cells are positive values, blue cells are negative. Real models use 768 to 3,072 dimensions.</p></div>
+      </div>
+      <div class="panel corner">
+        <div class="panel-h">Embedding space · 2D projection <em>hover a point</em></div>
+        <div class="panel-b"><canvas class="viz map" id="map1" height="360"></canvas>
+          <p class="note">96 dimensions squeezed into 2 with PCA. Notice chunks from the same document cluster together.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 04 QUERY ================= -->
+<section class="stage" id="s4">
+  <div class="wrap">
+    <div class="stage-head">
+      <div class="stage-num">04</div>
+      <div>
+        <div class="stage-phase online"><i></i>Query phase · runs on every question</div>
+        <h2>Embed the query</h2>
+        <p class="stage-desc">The user's question goes through the same embedding model as the chunks, so both live in the same space and can be compared. The question is also tokenized into keywords for the keyword search that runs in parallel.</p>
+        <div class="keyidea"><b>Try this</b>"Can I get my money back if I cancel?" never says "refund", yet vector search will still find the refund policy.</div>
+      </div>
+    </div>
+    <form class="qbox" id="qform">
+      <input id="q" autocomplete="off" value="Can I get my money back if I cancel?" aria-label="Your question">
+      <button class="btn solid" id="runBtn" type="submit">Launch query</button>
+    </form>
+    <div class="chips" id="samples"></div>
+    <div class="controls">
+      <div class="ctrl"><label>Retrieve top K <em id="vK">10</em></label><input type="range" id="kSl" min="4" max="20" value="10"></div>
+      <div class="ctrl"><label>Keep after rerank N <em id="vN">3</em></label><input type="range" id="nSl" min="1" max="6" value="3"></div>
+    </div>
+    <div class="grid g2">
+      <div class="panel corner"><div class="panel-h">Query terms · keyword view</div><div class="panel-b"><div class="termchips" id="qterms"><span class="muted">Launch a query to tokenize it.</span></div>
+        <p class="note">Stop words are dropped and words are stemmed. Blue tags show the meaning group a word belongs to.</p></div></div>
+      <div class="panel corner"><div class="panel-h">Query vector · semantic view <em>96 dims</em></div><div class="panel-b"><canvas class="viz" id="qvec" height="120"></canvas></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 05 RETRIEVE ================= -->
+<section class="stage" id="s5">
+  <div class="wrap">
+    <div class="stage-head">
+      <div class="stage-num">05</div>
+      <div>
+        <div class="stage-phase online"><i></i>Query phase · runs on every question</div>
+        <h2>Hybrid retrieval</h2>
+        <p class="stage-desc">Two searches run side by side. Vector search finds the chunks nearest to the query vector by cosine similarity. Keyword search (BM25) finds chunks that share exact words. Their ranked lists are merged with Reciprocal Rank Fusion, and the top K become candidates.</p>
+        <div class="keyidea"><b>Why both</b>Vector search understands meaning but can miss exact terms like product codes. Keyword search nails exact terms but misses synonyms. Fusion covers both blind spots.</div>
+      </div>
+    </div>
+    <div id="retrieveOut"></div>
+  </div>
+</section>
+
+<!-- ================= 06 RERANK ================= -->
+<section class="stage" id="s6">
+  <div class="wrap">
+    <div class="stage-head">
+      <div class="stage-num">06</div>
+      <div>
+        <div class="stage-phase online"><i></i>Query phase · runs on every question</div>
+        <h2>Rerank</h2>
+        <p class="stage-desc">A reranker (a cross-encoder) reads the query and each candidate together and scores how well that chunk actually answers the question. It is more accurate than the first search but too slow to run on every chunk, which is why retrieval shortlists first. Only the top N survive into the prompt.</p>
+        <div class="keyidea"><b>Watch for</b>Rank changes. A chunk that looked close in vector space can drop when it does not actually cover what was asked.</div>
+      </div>
+    </div>
+    <div id="rerankOut"></div>
+  </div>
+</section>
+
+<!-- ================= 07 AUGMENT ================= -->
+<section class="stage" id="s7">
+  <div class="wrap">
+    <div class="stage-head">
+      <div class="stage-num">07</div>
+      <div>
+        <div class="stage-phase online"><i></i>Query phase · runs on every question</div>
+        <h2>Augment the prompt</h2>
+        <p class="stage-desc">The surviving chunks are pasted into the prompt as numbered context, along with an instruction to answer only from that context and the user's original question. This is the "augmented" in Retrieval Augmented Generation.</p>
+        <div class="keyidea"><b>Key idea</b>The LLM is not searching anything. It only sees what retrieval hands it, so retrieval quality caps answer quality.</div>
+      </div>
+    </div>
+    <div id="augmentOut"></div>
+  </div>
+</section>
+
+<!-- ================= 08 GENERATE ================= -->
+<section class="stage" id="s8">
+  <div class="wrap">
+    <div class="stage-head">
+      <div class="stage-num">08</div>
+      <div>
+        <div class="stage-phase online"><i></i>Query phase · runs on every question</div>
+        <h2>Generate a grounded answer</h2>
+        <p class="stage-desc">The LLM reads the augmented prompt and writes an answer grounded in the context, with citations back to the source chunks. If the context does not contain the answer, a well-built system says so instead of guessing.</p>
+        <div class="keyidea"><b>Simulator note</b>To run fully offline, this simulator composes the answer from the most relevant sentences. A real LLM would rewrite them into fluent prose.</div>
+      </div>
+    </div>
+    <div id="generateOut"></div>
+  </div>
+</section>
+
+<!-- ================= SUMMARY ================= -->
+<section class="stage" id="summary">
+  <div class="wrap">
+    <div class="stage-head">
+      <div class="stage-num">✓</div>
+      <div>
+        <div class="stage-phase"><i></i>Mission summary</div>
+        <h2>The funnel</h2>
+        <p class="stage-desc">RAG is a narrowing funnel. Each stage trades a little speed for a lot more precision, until a small, highly relevant slice of your data reaches the model.</p>
+      </div>
+    </div>
+    <div class="funnel">
+      <div><b id="fDocs">6</b><span>Documents</span></div>
+      <div><b id="fChunks">0</b><span>Chunks</span></div>
+      <div><b id="fK">0</b><span>Candidates</span></div>
+      <div><b id="fN">0</b><span>In context</span></div>
+      <div><b>1</b><span>Answer</span></div>
+    </div>
+  </div>
+</section>
+</main>
+<footer><div class="wrap">RAG//SIM · Educational simulation. Embeddings are hashed bag-of-words vectors with a small synonym map, BM25 is real, fusion is RRF (k = 60), reranking is a heuristic stand-in for a cross-encoder.</div></footer>
+<div class="tooltip" id="tip"></div>
+
+<script>
+/* =====================================================
+   CORPUS (fictional)
+===================================================== */
+const DOCS=[
+{title:"Launch Pricing",text:"Helios offers two ways to fly. A dedicated launch reserves the entire vehicle for a single customer and is priced at a flat rate of 62 million dollars per mission. Rideshare missions group many small satellites on one flight, and the price starts at 6,000 dollars per kilogram with a minimum fee of 300,000 dollars. Payloads above 200 kilograms are charged a reduced rate of 5,200 dollars per kilogram. All prices include standard integration, one fit check and launch insurance coverage for the vehicle. Customers who request changes to orbit or payload mass less than 90 days before launch pay a late change fee of 4 percent of the contract value. Payment is collected in three installments: 30 percent at signing, 40 percent at payload delivery and the final 30 percent ten days before launch."},
+{title:"Weather and Launch Windows",text:"Every mission has a launch window, a period of time when the target orbit can be reached. Windows can be instantaneous or last up to two hours. The launch director will scrub the attempt if ground winds exceed 30 knots, if lightning is detected within 10 nautical miles, or if thick clouds create a risk of triggered lightning. Upper level wind shear is checked with weather balloons released four hours before liftoff. When a launch is scrubbed for weather, the team recycles the vehicle and the next attempt is usually scheduled within 24 to 48 hours. Weather delays never carry a fee for the customer. If a delay lasts more than 30 days for reasons controlled by Helios, the customer may move to a different mission at no cost."},
+{title:"Payload Integration",text:"Payload integration begins nine months before launch with a kickoff review of mass, center of gravity and electrical interfaces. Customers deliver their spacecraft to the Helios processing facility 30 days before launch. Inside the cleanroom, the satellite is fueled, mounted to the adapter and tested for vibration and shock loads. A fit check confirms that connectors and separation systems align. About seven days before launch the payload is encapsulated inside the fairing, which protects it from heat and aerodynamic pressure during ascent. After encapsulation, customer access is limited to battery charging through umbilical connections. Final data on separation velocity and orientation is shared with the customer within one hour of deployment."},
+{title:"Booster Recovery",text:"The first stage booster of every Helios rocket is designed to land and fly again. After stage separation, the booster flips, performs a boostback burn and returns either to a landing pad near the launch site or to an autonomous droneship at sea. Heavier missions require droneship landings because less fuel is left for the return. Once recovered, the booster goes through inspection and refurbishment, which takes about three weeks. Engines are tested, heat shields are replaced and the grid fins are serviced. A single booster is certified for up to 20 flights, and the current fleet leader has flown 17 times. Reuse lowers the cost of each launch and is the main reason rideshare prices have fallen."},
+{title:"Cancellation and Refunds",text:"Customers may cancel a launch contract at any time by written notice. The refund depends on how close the cancellation is to the scheduled launch date. Cancellations more than 12 months before launch receive a full refund minus a 5 percent administrative fee. Between 12 months and 6 months before launch, 60 percent of payments made are returned. Within 6 months of launch, payments are non refundable, but the customer may transfer the slot to another payload once at no charge. If Helios cancels a mission, the customer receives a full refund of every payment within 30 days. Refunds are issued to the original payment account and are not affected by weather delays."},
+{title:"Crew Safety",text:"Crewed missions fly on the Aster capsule, which carries up to four astronauts. The capsule has a launch escape system that can pull the crew away from the rocket at any moment from the pad to orbit. Escape engines reach full thrust in under 100 milliseconds. Astronauts complete 18 months of training, including emergency egress drills, water landing survival and manual docking practice. During ascent, flight controllers monitor more than 3,000 sensors, and an abort is triggered automatically if engine pressure or trajectory leaves safe limits. After splashdown, recovery teams reach the capsule within one hour."}
+];
+const SAMPLES=["Can I get my money back if I cancel?","How much does a rideshare launch cost?","What happens if bad weather scrubs my launch?","How many times can a booster be reused?","How do astronauts escape in an emergency?","When must I deliver my satellite?"];
+const COLORS=["#5fb4ff","#ff8a3d","#b98cff","#4fd1a5","#f2c94c","#ff6b8b"];
+
+/* =====================================================
+   TEXT PROCESSING
+===================================================== */
+const STOP=new Set("a an the is are was were be been being to of and or in on at for with by from it its this that these those do does did how what which who whom can could will would should if get got much many any your you our we they their i me my as into up per one not no but so than then there here about over also all each every may must".split(" "));
+const CONCEPTS={
+ cost:"cost costs price prices pricing priced fee fees charge charged pay payment payments money expensive cheap rate dollars afford",
+ refund:"refund refunds refundable reimburse reimbursement returned back repay",
+ cancel:"cancel cancels cancelled canceled cancellation cancellations terminate withdraw quit",
+ weather:"weather wind winds lightning storm rain clouds cloud balloons bad",
+ delay:"delay delays scrub scrubs scrubbed postpone reschedule rescheduled recycles late",
+ reuse:"reuse reused reusable refurbish refurbishment refly recover recovered recovery land landing landings again flown",
+ booster:"booster boosters stage rocket vehicle",
+ payload:"payload payloads satellite satellites spacecraft cargo",
+ safety:"safety safe abort escape emergency survival risk egress",
+ crew:"crew crewed astronaut astronauts people human humans",
+ time:"timeline schedule scheduled days weeks months hours long when deadline",
+ deliver:"deliver delivery delivered ship arrive handover"
+};
+function stem(w){
+  if(w.length>4&&w.endsWith("ies"))return w.slice(0,-3)+"y";
+  if(w.length>5&&w.endsWith("ing"))return w.slice(0,-3);
+  if(w.length>4&&w.endsWith("ed"))return w.slice(0,-2);
+  if(w.length>3&&w.endsWith("s")&&!w.endsWith("ss"))return w.slice(0,-1);
+  return w;
+}
+const CONCEPT_OF={};
+for(const [c,ws] of Object.entries(CONCEPTS)) ws.split(" ").forEach(w=>CONCEPT_OF[stem(w)]=c);
+const tokens=t=>(t.toLowerCase().replace(/,(?=\d)/g,"").match(/[a-z0-9]+/g)||[]);
+const terms=t=>tokens(t).filter(w=>!STOP.has(w)).map(stem).filter(w=>w.length>1&&!STOP.has(w));
+const keyOf=t=>CONCEPT_OF[t]?"c:"+CONCEPT_OF[t]:t;
+const esc=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* =====================================================
+   EMBEDDING (hashed bag-of-words + concept dims)
+===================================================== */
+const DIM=96;
+function hash(s){let x=2166136261;for(let i=0;i<s.length;i++){x^=s.charCodeAt(i);x=Math.imul(x,16777619)}return x>>>0}
+function normalize(v){let n=0;for(const x of v)n+=x*x;n=Math.sqrt(n)||1;for(let i=0;i<v.length;i++)v[i]/=n;return v}
+function embed(text){
+  const v=new Float32Array(DIM);
+  for(const t of terms(text)){
+    const h=hash(t); v[h%DIM]+=((h>>9)&1)?0.8:-0.8;
+    const c=CONCEPT_OF[t]; if(c){v[hash("C:"+c)%DIM]+=2.2}
+  }
+  return normalize(v);
+}
+const cos=(a,b)=>{let s=0;for(let i=0;i<a.length;i++)s+=a[i]*b[i];return s};
+
+/* =====================================================
+   STATE + INDEXING
+===================================================== */
+const S={chunks:[],vecs:[],cterms:[],df:{},avgdl:1,pca:null,proj:[],ran:false,res:null};
+
+function chunkDocs(size,ov){
+  const out=[];
+  DOCS.forEach((d,di)=>{
+    const w=d.text.split(/\s+/),step=Math.max(1,size-ov);
+    for(let i=0;i<w.length;i+=step){
+      out.push({id:"C"+String(out.length+1).padStart(2,"0"),doc:di,text:w.slice(i,i+size).join(" "),ov:i>0?Math.min(ov,size):0});
+      if(i+size>=w.length)break;
+    }
+  });
+  return out;
+}
+function pca(vecs){
+  const n=vecs.length,mean=new Float32Array(DIM);
+  vecs.forEach(v=>{for(let j=0;j<DIM;j++)mean[j]+=v[j]/n});
+  const X=vecs.map(v=>v.map((x,j)=>x-mean[j]));
+  const comps=[];
+  for(let c=0;c<2;c++){
+    let p=normalize(new Float32Array(DIM).map((_,j)=>Math.sin(j*12.9898+c*78.233)+0.01));
+    for(let it=0;it<60;it++){
+      const w=new Float32Array(DIM);
+      for(const x of X){let s=0;for(let j=0;j<DIM;j++)s+=x[j]*p[j];for(let j=0;j<DIM;j++)w[j]+=s*x[j]}
+      for(const q of comps){let s=0;for(let j=0;j<DIM;j++)s+=w[j]*q[j];for(let j=0;j<DIM;j++)w[j]-=s*q[j]}
+      p=normalize(w);
+    }
+    comps.push(p);
+  }
+  return v=>comps.map(q=>{let s=0;for(let j=0;j<DIM;j++)s+=(v[j]-mean[j])*q[j];return s});
+}
+function buildIndex(){
+  const size=+$("#size").value,ov=+$("#overlap").value;
+  S.chunks=chunkDocs(size,ov);
+  S.vecs=S.chunks.map(c=>embed(c.text));
+  S.cterms=S.chunks.map(c=>terms(c.text));
+  S.df={};S.cterms.forEach(ts=>new Set(ts).forEach(t=>S.df[t]=(S.df[t]||0)+1));
+  S.avgdl=S.cterms.reduce((a,t)=>a+t.length,0)/S.cterms.length;
+  S.pca=pca(S.vecs);S.proj=S.vecs.map(S.pca);
+}
+function bm25(qt,i){
+  const N=S.chunks.length,ts=S.cterms[i],dl=ts.length,k1=1.2,b=.75;let s=0;
+  for(const t of new Set(qt)){
+    const f=ts.filter(x=>x===t).length;if(!f)continue;
+    const idf=Math.log(1+(N-S.df[t]+.5)/(S.df[t]+.5));
+    s+=idf*(f*(k1+1))/(f+k1*(1-b+b*dl/S.avgdl));
+  }
+  return s;
+}
+function proximity(keys,need){
+  if(need.size<2)return need.size?1:0;
+  const cnt=new Map();let have=0,best=Infinity,l=0;
+  for(let r=0;r<keys.length;r++){
+    const k=keys[r];if(!need.has(k))continue;
+    cnt.set(k,(cnt.get(k)||0)+1);if(cnt.get(k)===1)have++;
+    while(have===need.size){best=Math.min(best,r-l+1);const lk=keys[l];if(need.has(lk)){cnt.set(lk,cnt.get(lk)-1);if(!cnt.get(lk))have--}l++}
+  }
+  return Math.min(1,need.size*2/best);
+}
+
+/* =====================================================
+   QUERY PIPELINE
+===================================================== */
+function runPipeline(q){
+  const K=+$("#kSl").value,N=+$("#nSl").value;
+  const qv=embed(q),qt=terms(q),qkeys=new Set(qt.map(keyOf));
+  const vec=S.chunks.map((c,i)=>({i,s:cos(qv,S.vecs[i])})).sort((a,b)=>b.s-a.s);
+  const kw=S.chunks.map((c,i)=>({i,s:bm25(qt,i)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s);
+  const vTop=vec.slice(0,K),kTop=kw.slice(0,K);
+  const rrf=new Map();
+  [vTop,kTop].forEach(list=>list.forEach((x,r)=>rrf.set(x.i,(rrf.get(x.i)||0)+1/(60+r+1))));
+  const fused=[...rrf].map(([i,s])=>({i,s})).sort((a,b)=>b.s-a.s).slice(0,K);
+  const vSet=new Set(vTop.map(x=>x.i)),kSet=new Set(kTop.map(x=>x.i));
+  const rer=fused.map((x,r)=>{
+    const keys=S.cterms[x.i].map(keyOf),present=new Set(keys.filter(k=>qkeys.has(k)));
+    const cov=qkeys.size?present.size/qkeys.size:0,prox=proximity(keys,present),c=Math.max(0,cos(qv,S.vecs[x.i]));
+    return {i:x.i,old:r,cos:c,cov,prox,s:.45*c+.4*cov+.15*prox};
+  }).sort((a,b)=>b.s-a.s);
+  const top=rer.slice(0,N);
+  S.res={q,qv,qt,qkeys,vTop,kTop,fused,vSet,kSet,rer,top,K,N};
+  S.ran=true;
+}
+
+/* =====================================================
+   RENDER: STATIC STAGES
+===================================================== */
+function $(s){return document.querySelector(s)}
+function renderDocs(){
+  $("#docs").innerHTML=DOCS.map((d,i)=>`<article class="panel corner doc" style="color:inherit" onclick="this.classList.toggle('open')">
+    <div class="panel-b"><div class="meta"><span class="tag" style="color:${COLORS[i]}">D${i+1}</span><span>${d.text.split(/\s+/).length} words</span></div>
+    <h3>${d.title}</h3><p>${esc(d.text)}</p></div></article>`).join("");
+  $("#legend").innerHTML=DOCS.map((d,i)=>`<span><i style="background:${COLORS[i]}"></i>D${i+1} ${d.title}</span>`).join("");
+}
+function renderChunks(){
+  $("#chunks").innerHTML=S.chunks.map((c,k)=>{
+    const w=c.text.split(" ");
+    const body=c.ov?`<mark>${esc(w.slice(0,c.ov).join(" "))}</mark> ${esc(w.slice(c.ov).join(" "))}`:esc(c.text);
+    return `<div class="chunk" style="--c:${COLORS[c.doc]};animation-delay:${Math.min(k*18,700)}ms"><div class="cid"><span>${c.id}</span><span>D${c.doc+1} · ${w.length}w</span></div>${body}</div>`;
+  }).join("");
+  ["#tChunks","#fChunks"].forEach(s=>$(s).textContent=S.chunks.length);
+}
+function setupCanvas(cv,h){
+  const dpr=window.devicePixelRatio||1,w=cv.clientWidth;
+  cv.width=w*dpr;cv.height=h*dpr;cv.style.height=h+"px";
+  const ctx=cv.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);return {ctx,w,h};
+}
+function drawHeat(){
+  const cv=$("#heat"),rows=S.vecs.length,h=Math.min(360,Math.max(200,rows*7));
+  const {ctx,w}=setupCanvas(cv,h),cw=w/DIM,rh=h/rows;
+  ctx.fillStyle="#000";ctx.fillRect(0,0,w,h);
+  S.vecs.forEach((v,r)=>{for(let j=0;j<DIM;j++){const x=v[j];if(Math.abs(x)<.01)continue;
+    ctx.fillStyle=x>0?`rgba(255,255,255,${Math.min(1,x*2.4)})`:`rgba(95,180,255,${Math.min(1,-x*2.4)})`;
+    ctx.fillRect(j*cw,r*rh,cw-.5,rh-.6)}
+    ctx.fillStyle=COLORS[S.chunks[r].doc];ctx.fillRect(0,r*rh,2,rh-.6);
+  });
+}
+function drawQvec(){
+  const cv=$("#qvec"),{ctx,w,h}=setupCanvas(cv,120),bw=w/DIM,mid=h/2;
+  ctx.clearRect(0,0,w,h);ctx.strokeStyle="rgba(255,255,255,.15)";ctx.beginPath();ctx.moveTo(0,mid);ctx.lineTo(w,mid);ctx.stroke();
+  if(!S.res)return;
+  S.res.qv.forEach((x,j)=>{const bh=x*mid*1.6;ctx.fillStyle=x>0?"#fff":"#5fb4ff";ctx.fillRect(j*bw+.5,bh>0?mid-bh:mid,Math.max(1,bw-1.5),Math.abs(bh))});
+}
+
+/* ---------- embedding map ---------- */
+const maps=[];
+function drawMap(cv,withQuery){
+  const {ctx,w,h}=setupCanvas(cv,360),pad=26;
+  const pts=S.proj.slice();const qp=withQuery&&S.res?S.pca(S.res.qv):null;
+  const all=qp?pts.concat([qp]):pts;
+  const xs=all.map(p=>p[0]),ys=all.map(p=>p[1]);
+  const mnx=Math.min(...xs),mxx=Math.max(...xs),mny=Math.min(...ys),mxy=Math.max(...ys);
+  const sx=x=>pad+(x-mnx)/((mxx-mnx)||1)*(w-2*pad),sy=y=>pad+(y-mny)/((mxy-mny)||1)*(h-2*pad);
+  ctx.fillStyle="#000";ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle="rgba(255,255,255,.06)";ctx.lineWidth=1;
+  for(let x=0;x<w;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}
+  for(let y=0;y<h;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}
+  const screen=pts.map(p=>[sx(p[0]),sy(p[1])]);
+  const topSet=qp?new Set(S.res.top.map(x=>x.i)):new Set(),vSet=qp?S.res.vSet:new Set();
+  if(qp){
+    const Q=[sx(qp[0]),sy(qp[1])];
+    ctx.setLineDash([3,4]);
+    S.res.vTop.forEach(x=>{const p=screen[x.i];ctx.strokeStyle=topSet.has(x.i)?"rgba(255,255,255,.7)":"rgba(255,255,255,.2)";ctx.beginPath();ctx.moveTo(Q[0],Q[1]);ctx.lineTo(p[0],p[1]);ctx.stroke()});
+    ctx.setLineDash([]);
+  }
+  screen.forEach((p,i)=>{
+    const dim=qp&&!vSet.has(i)&&!topSet.has(i);
+    ctx.globalAlpha=dim?.35:1;ctx.fillStyle=COLORS[S.chunks[i].doc];
+    ctx.beginPath();ctx.arc(p[0],p[1],topSet.has(i)?5:3.5,0,7);ctx.fill();
+    if(topSet.has(i)){ctx.strokeStyle="#fff";ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(p[0],p[1],10,0,7);ctx.stroke()}
+  });
+  ctx.globalAlpha=1;
+  if(qp){
+    const [x,y]=[sx(qp[0]),sy(qp[1])];
+    ctx.strokeStyle="#fff";ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(x-12,y);ctx.lineTo(x-4,y);ctx.moveTo(x+4,y);ctx.lineTo(x+12,y);ctx.moveTo(x,y-12);ctx.lineTo(x,y-4);ctx.moveTo(x,y+4);ctx.lineTo(x,y+12);ctx.stroke();
+    ctx.font="500 11px 'JetBrains Mono',monospace";ctx.fillStyle="#fff";ctx.fillText("QUERY",x+14,y-8);
+  }
+  const m=maps.find(m=>m.cv===cv);if(m)m.screen=screen;else maps.push({cv,screen,withQuery});
+}
+const tip=$("#tip");
+document.addEventListener("mousemove",e=>{
+  const m=maps.find(m=>m.cv===e.target);
+  if(!m){tip.style.display="none";return}
+  const r=m.cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+  let best=-1,bd=196;m.screen.forEach((p,i)=>{const d=(p[0]-x)**2+(p[1]-y)**2;if(d<bd){bd=d;best=i}});
+  if(best<0){tip.style.display="none";return}
+  const c=S.chunks[best];
+  tip.innerHTML=`<b style="color:${COLORS[c.doc]}">${c.id}</b> · ${DOCS[c.doc].title}<br><span class="muted">${esc(c.text.slice(0,120))}…</span>`;
+  tip.style.display="block";tip.style.left=Math.min(e.clientX+14,innerWidth-300)+"px";tip.style.top=(e.clientY+14)+"px";
+});
+
+/* =====================================================
+   RENDER: QUERY STAGES
+===================================================== */
+const awaiting=`<div class="awaiting">Awaiting query<br><a class="btn" href="#s4">Go to stage 04</a></div>`;
+function chunkTag(i){const c=S.chunks[i];return `<span class="tag" style="color:${COLORS[c.doc]}">${c.id}</span>`}
+function rows(list,max,fmt,mark){
+  const top=list.length?list[0].s:1;
+  return list.length?list.map((x,r)=>`<li class="row ${mark&&mark(x.i)?"both":""}" style="animation-delay:${r*55}ms">
+   <span class="rk">${String(r+1).padStart(2,"0")}</span>${chunkTag(x.i)}
+   <div><div class="ttl">${DOCS[S.chunks[x.i].doc].title}</div><div class="bar"><i style="width:${Math.max(3,x.s/top*100)}%"></i></div></div>
+   <span class="sc">${fmt(x.s)}</span></li>`).join(""):`<li class="note">No exact keyword matches. This is where keyword search fails on its own.</li>`;
+}
+function renderQuery(){
+  const R=S.res;
+  $("#qterms").innerHTML=R.qt.length?R.qt.map(t=>`<span class="term">${t}${CONCEPT_OF[t]?`<small>${CONCEPT_OF[t]}</small>`:""}</span>`).join(""):`<span class="muted">No searchable terms left after removing stop words.</span>`;
+  drawQvec();
+  ["#tK","#fK"].forEach(s=>$(s).textContent=R.fused.length);
+  ["#tN","#fN"].forEach(s=>$(s).textContent=R.top.length);
+
+  const both=i=>R.vSet.has(i)&&R.kSet.has(i);
+  $("#retrieveOut").innerHTML=`
+   <div class="panel corner" style="margin-bottom:16px"><div class="panel-h">Embedding space · query vs chunks <em>dashed = vector top ${R.K}</em></div>
+     <div class="panel-b"><canvas class="viz map" id="map2" height="360"></canvas><p class="note">Ringed points are the chunks that will survive reranking.</p></div></div>
+   <div class="grid g3">
+    <div class="panel corner"><div class="panel-h">Vector search <em>cosine</em></div><div class="panel-b"><ul class="rlist">${rows(R.vTop,R.K,s=>s.toFixed(3),both)}</ul></div></div>
+    <div class="panel corner"><div class="panel-h">Keyword search <em>BM25</em></div><div class="panel-b"><ul class="rlist">${rows(R.kTop,R.K,s=>s.toFixed(2),both)}</ul></div></div>
+    <div class="panel corner"><div class="panel-h">Fused candidates <em>RRF top ${R.K}</em></div><div class="panel-b"><ul class="rlist">${rows(R.fused,R.K,s=>s.toFixed(4),both)}</ul></div></div>
+   </div>
+   <p class="note"><span style="color:var(--hot)">◆</span> found by both searches. RRF rewards chunks that rank well in both lists: score = Σ 1 / (60 + rank).</p>`;
+  drawMap($("#map2"),true);
+
+  const topS=R.rer[0]?R.rer[0].s:1;
+  $("#rerankOut").innerHTML=`<div class="panel corner"><div class="panel-h">Cross-encoder scores <em>${R.fused.length} in · ${R.top.length} out</em></div><div class="panel-b">`+
+   R.rer.map((x,r)=>{
+     const d=x.old-r,cls=d>0?"up":d<0?"down":"flat",sym=d>0?"▲"+d:d<0?"▼"+(-d):"·";
+     const html=`<div class="rr ${r>=R.N?"out":""}" style="animation-delay:${r*70}ms">
+       <span class="mono muted" style="font-size:11px">${String(r+1).padStart(2,"0")}</span>${chunkTag(x.i)}
+       <div><div class="ttl" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#c4c8cc">${esc(S.chunks[x.i].text.slice(0,90))}…</div><div class="bar"><i style="width:${x.s/topS*100}%"></i></div></div>
+       <span class="comps"><span>sim ${x.cos.toFixed(2)}</span><span>cov ${x.cov.toFixed(2)}</span><span>prox ${x.prox.toFixed(2)}</span></span>
+       <span class="delta ${cls}">${sym} <span class="muted">${x.s.toFixed(3)}</span></span></div>`;
+     return html+(r===R.N-1&&R.rer.length>R.N?`<div class="cutoff">CONTEXT CUTOFF · TOP ${R.N} KEPT</div>`:"");
+   }).join("")+`<p class="note">sim = meaning match · cov = share of the question's ideas the chunk covers · prox = how close together those ideas appear. ▲▼ shows movement from the fused rank.</p></div></div>`;
+
+  const ctxBlocks=R.top.map((x,n)=>`<span class="k">[${n+1}]</span> <span style="color:${COLORS[S.chunks[x.i].doc]}">(${S.chunks[x.i].id} · ${DOCS[S.chunks[x.i].doc].title})</span>\n${esc(S.chunks[x.i].text)}`).join("\n\n");
+  const prompt=`<span class="k">SYSTEM</span>\nYou are a support assistant for Helios Launch. Answer using ONLY the context below.\nCite sources as [n]. If the answer is not in the context, say you don't know.\n\n<span class="k">CONTEXT</span>\n${ctxBlocks}\n\n<span class="k">QUESTION</span>\n<span class="q">${esc(R.q)}</span>`;
+  const words=(prompt.replace(/<[^>]+>/g,"").match(/\S+/g)||[]).length;
+  $("#augmentOut").innerHTML=`<div class="panel corner"><div class="panel-h">Augmented prompt <em>≈ ${Math.round(words*1.35)} tokens</em></div><div class="panel-b"><pre class="prompt">${prompt}</pre></div></div>`;
+
+  $("#generateOut").innerHTML=`<div class="panel corner"><div class="panel-h">LLM output <em id="genStatus">STANDBY</em></div><div class="panel-b"><div class="answer" id="answer"><span class="caret"></span></div><div class="cites" id="cites"></div></div></div>`;
+  S.answerPending=true;
+  if(isVisible($("#s8")))typeAnswer();
+}
+function composeAnswer(){
+  const R=S.res,cands=[];
+  R.top.forEach((x,n)=>{
+    S.chunks[x.i].text.split(/(?<=[.!?])\s+/).forEach(sent=>{
+      const ks=new Set(terms(sent).map(keyOf));let hit=0;R.qkeys.forEach(k=>{if(ks.has(k))hit++});
+      if(!hit||sent.split(" ").length<5)return;
+      const startsClean=/^[A-Z0-9]/.test(sent)&&/[.!?]$/.test(sent);
+      cands.push({sent,n:n+1,s:hit/Math.max(1,R.qkeys.size)+(startsClean?.25:0)+(R.top.length-n)*.02});
+    });
+  });
+  const seen=new Set(),pick=[];
+  cands.sort((a,b)=>b.s-a.s).forEach(c=>{if(pick.length<3&&!seen.has(c.sent)){seen.add(c.sent);pick.push(c)}});
+  if(!pick.length)return [{t:"The retrieved context does not contain an answer to this question, so I can't answer it reliably. A grounded system declines rather than guessing.",n:0}];
+  return pick.map(p=>({t:p.sent.replace(/^[a-z]/,m=>m.toUpperCase()).replace(/[^.!?]$/,m=>m+"."),n:p.n}));
+}
+function typeAnswer(){
+  if(!S.answerPending)return;S.answerPending=false;
+  const parts=composeAnswer(),el=$("#answer"),st=$("#genStatus");
+  st.textContent="GENERATING";
+  let pi=0,ci=0,done="";
+  clearInterval(S.typer);
+  S.typer=setInterval(()=>{
+    const p=parts[pi];
+    if(!p){clearInterval(S.typer);el.innerHTML=done;st.textContent="COMPLETE";
+      $("#cites").innerHTML=S.res.top.map((x,n)=>`<div><span class="mono" style="color:var(--hot)">[${n+1}]</span> ${chunkTag(x.i)} ${DOCS[S.chunks[x.i].doc].title}</div>`).join("");return}
+    ci+=3;
+    if(ci>=p.t.length){done+=esc(p.t)+(p.n?`<sup>[${p.n}]</sup>`:"")+" ";pi++;ci=0;el.innerHTML=done+'<span class="caret"></span>';return}
+    el.innerHTML=done+esc(p.t.slice(0,ci))+'<span class="caret"></span>';
+  },16);
+}
+function renderAwaiting(){["#retrieveOut","#rerankOut","#augmentOut","#generateOut"].forEach(s=>$(s).innerHTML=awaiting)}
+
+/* =====================================================
+   CONTROLS + FLOW
+===================================================== */
+function reindex(){
+  $("#vSize").textContent=$("#size").value+" words";$("#vOv").textContent=$("#overlap").value+" words";
+  buildIndex();renderChunks();drawHeat();drawMap($("#map1"),false);
+  if(S.ran){runPipeline(S.res.q);renderQuery()}
+}
+let rt;["#size","#overlap"].forEach(s=>$(s).addEventListener("input",()=>{clearTimeout(rt);rt=setTimeout(reindex,120)}));
+["#kSl","#nSl"].forEach(s=>$(s).addEventListener("input",()=>{
+  $("#vK").textContent=$("#kSl").value;$("#vN").textContent=$("#nSl").value;
+  if(S.ran){clearTimeout(rt);rt=setTimeout(()=>{runPipeline(S.res.q);renderQuery()},150)}
+}));
+$("#samples").innerHTML=SAMPLES.map(s=>`<button class="chip" type="button">${s}</button>`).join("");
+$("#samples").addEventListener("click",e=>{if(e.target.classList.contains("chip")){$("#q").value=e.target.textContent;launch()}});
+$("#qform").addEventListener("submit",e=>{e.preventDefault();launch()});
+
+function launch(){
+  const q=$("#q").value.trim();if(!q)return;
+  const btn=$("#runBtn");btn.disabled=true;let t=3;
+  $("#heroStatus").textContent="IN FLIGHT";
+  btn.textContent="T-"+t;
+  const iv=setInterval(()=>{t--;
+    if(t>0){btn.textContent="T-"+t;return}
+    clearInterval(iv);btn.textContent="Liftoff";
+    runPipeline(q);renderQuery();
+    setTimeout(()=>{btn.disabled=false;btn.textContent="Launch query";$("#s5").scrollIntoView({behavior:"smooth"})},350);
+  },320);
+}
+
+/* tracker */
+const steps=[...document.querySelectorAll(".step")];
+const order=steps.map(s=>s.dataset.s);
+function isVisible(el){const r=el.getBoundingClientRect();return r.top<innerHeight*.7&&r.bottom>innerHeight*.3}
+const io=new IntersectionObserver(es=>es.forEach(e=>{
+  if(!e.isIntersecting)return;
+  const id=e.target.id,idx=order.indexOf(id);
+  steps.forEach((s,k)=>{s.classList.toggle("active",k===idx);s.classList.toggle("done",idx>=0&&k<idx)});
+  if(id==="s8")typeAnswer();
+}),{rootMargin:"-45% 0px -50% 0px"});
+document.querySelectorAll("section.stage").forEach(s=>io.observe(s));
+
+/* starfield */
+(function(){
+  const cv=$("#stars"),ctx=cv.getContext("2d");let W,H,stars=[];
+  function size(){const d=window.devicePixelRatio||1;W=cv.clientWidth;H=cv.clientHeight;cv.width=W*d;cv.height=H*d;ctx.setTransform(d,0,0,d,0,0);
+    stars=Array.from({length:Math.round(W*H/5200)},()=>({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.2+.2,a:Math.random(),v:Math.random()*.02+.004,s:Math.random()*.15+.03}))}
+  function frame(){ctx.clearRect(0,0,W,H);
+    for(const s of stars){s.a+=s.v;s.x-=s.s;if(s.x<0)s.x=W;
+      ctx.globalAlpha=.35+.65*Math.abs(Math.sin(s.a));ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,7);ctx.fill()}
+    ctx.globalAlpha=1;requestAnimationFrame(frame)}
+  size();addEventListener("resize",size);frame();
+})();
+
+let rz;addEventListener("resize",()=>{clearTimeout(rz);rz=setTimeout(()=>{drawHeat();drawMap($("#map1"),false);if(S.ran){drawQvec();const m2=$("#map2");if(m2)drawMap(m2,true)}},150)});
+
+/* boot */
+renderDocs();renderAwaiting();reindex();drawQvec();
+</script>
+</body>
+</html>
